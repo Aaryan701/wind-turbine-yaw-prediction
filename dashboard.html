@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wind Turbine Yaw Prediction & Floral Optimization Dashboard</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --background: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --foreground: #f8fafc;
+      --muted-foreground: #94a3b8;
+      --primary: #38bdf8;
+      --accent: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    body {
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 16px;
+    }
+    input[type=range] {
+      accent-color: var(--primary);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <div class="max-w-7xl mx-auto space-y-4">
+    
+    <!-- Top Header & Status Bar -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-pulse"></div>
+          <h1 class="text-xl font-bold tracking-tight text-[var(--foreground)]">Wind Turbine Yaw Prediction System</h1>
+          <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-sky-950 text-sky-400 border border-sky-800">ConvGRU + Self-Attention</span>
+        </div>
+        <p class="text-sm text-[var(--muted-foreground)] mt-1">Real-time aerodynamic tracking, nacelle deadband controller, and Flower Pollination Algorithm (FPA) tuning.</p>
+      </div>
+
+      <!-- Quick Status Badges -->
+      <div class="flex items-center gap-2 text-xs">
+        <div class="bg-slate-900/80 border border-[var(--border)] px-3 py-1.5 rounded-lg">
+          <span class="text-[var(--muted-foreground)]">Model Loss:</span>
+          <span class="font-semibold text-emerald-400 ml-1">Circular MSE</span>
+        </div>
+        <div class="bg-slate-900/80 border border-[var(--border)] px-3 py-1.5 rounded-lg">
+          <span class="text-[var(--muted-foreground)]">Inference Latency:</span>
+          <span class="font-semibold text-sky-400 ml-1" id="badge-latency">3.8 ms</span>
+        </div>
+        <div class="bg-slate-900/80 border border-[var(--border)] px-3 py-1.5 rounded-lg">
+          <span class="text-[var(--muted-foreground)]">Yaw State:</span>
+          <span class="font-semibold ml-1" id="badge-yaw-state">DEADBAND HOLD</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Key Telemetry Metrics Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">Wind Direction</div>
+        <div class="text-xl font-bold text-sky-400 mt-1 flex items-baseline gap-1">
+          <span id="metric-wind-dir">180.0</span><span class="text-xs">°</span>
+        </div>
+        <div class="text-[12px] text-slate-400 mt-0.5" id="metric-wind-cardinal">South (S)</div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">Nacelle Yaw Angle</div>
+        <div class="text-xl font-bold text-amber-400 mt-1 flex items-baseline gap-1">
+          <span id="metric-nacelle-yaw">180.0</span><span class="text-xs">°</span>
+        </div>
+        <div class="text-[12px] text-slate-400 mt-0.5" id="metric-yaw-rate">0.0 °/s rate</div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">DL Predicted Yaw</div>
+        <div class="text-xl font-bold text-emerald-400 mt-1 flex items-baseline gap-1">
+          <span id="metric-pred-yaw">180.2</span><span class="text-xs">°</span>
+        </div>
+        <div class="text-[12px] text-emerald-500 mt-0.5" id="metric-pred-diff">Δ +0.2° (Next Step)</div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">Yaw Misalignment (γ)</div>
+        <div class="text-xl font-bold mt-1 flex items-baseline gap-1" id="metric-misalign-wrap">
+          <span id="metric-misalign">0.0</span><span class="text-xs">°</span>
+        </div>
+        <div class="text-[12px] text-slate-400 mt-0.5">Threshold: ±<span id="metric-deadband-limit">7.0</span>°</div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">Active Power Output</div>
+        <div class="text-xl font-bold text-purple-400 mt-1 flex items-baseline gap-1">
+          <span id="metric-power">1420</span><span class="text-xs">kW</span>
+        </div>
+        <div class="text-[12px] text-slate-400 mt-0.5">Wind: <span id="metric-wind-speed">8.5</span> m/s</div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5">
+        <div class="text-xs text-[var(--muted-foreground)] font-medium">Aerodynamic Loss</div>
+        <div class="text-xl font-bold text-rose-400 mt-1 flex items-baseline gap-1">
+          <span id="metric-power-loss">0.0</span><span class="text-xs">kW</span>
+        </div>
+        <div class="text-[12px] text-rose-300/80 mt-0.5" id="metric-power-loss-pct">0.0% cos²(γ) loss</div>
+      </div>
+    </div>
+
+    <!-- Main Workspace (Compass + Time-Series Stream) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      
+      <!-- Left: Interactive Turbine Compass (5 cols) -->
+      <div class="lg:col-span-5 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm flex flex-col items-center">
+        <div class="w-full flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Aerodynamic Azimuth Compass</h2>
+          <span class="text-xs text-sky-400 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/60">Live Dynamics</span>
+        </div>
+
+        <div class="relative w-full aspect-square max-w-[360px] flex items-center justify-center">
+          <canvas id="compassCanvas" width="360" height="360" class="w-full h-full"></canvas>
+        </div>
+
+        <!-- Compass Legend -->
+        <div class="grid grid-cols-3 gap-2 w-full mt-3 text-xs text-center border-t border-[var(--border)] pt-3">
+          <div class="flex items-center justify-center gap-1.5 text-sky-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block"></span> Wind Vector
+          </div>
+          <div class="flex items-center justify-center gap-1.5 text-amber-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> Nacelle Yaw
+          </div>
+          <div class="flex items-center justify-center gap-1.5 text-emerald-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span> DL Predicted
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Real-Time SCADA Time-Series Stream (7 cols) -->
+      <div class="lg:col-span-7 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Real-Time SCADA Yaw Tracking Stream</h2>
+            <p class="text-xs text-slate-400 mt-0.5">True Wind Direction vs. Physical Nacelle Yaw vs. Deep Learning Forecast</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-toggle-sim" class="px-3 py-1 bg-sky-600 hover:bg-sky-500 text-xs font-semibold rounded-lg shadow transition">Pause</button>
+            <button id="btn-reset-stream" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-lg shadow transition">Reset</button>
+          </div>
+        </div>
+
+        <div class="w-full h-[260px] relative bg-slate-950/60 rounded-xl border border-[var(--border)] p-2">
+          <canvas id="chartCanvas" width="620" height="240" class="w-full h-full"></canvas>
+        </div>
+
+        <!-- Chart Legend and Explanation -->
+        <div class="flex flex-wrap items-center justify-between text-xs text-[var(--muted-foreground)] border-t border-[var(--border)] pt-3 mt-3">
+          <div class="flex items-center gap-4">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-sky-400 inline-block"></span> Wind Dir</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-amber-400 inline-block"></span> Nacelle Yaw</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-emerald-400 inline-block"></span> DL Prediction</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-rose-400 inline-block"></span> Yaw Error (γ)</span>
+          </div>
+          <span class="text-slate-400 text-[12px]">Sliding Window: 60 timesteps</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Interactive Simulation & Wind Shift Controls -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-3">SCADA Dynamic Controls & Stress Testing</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Wind Direction Slider -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300 font-medium">Target Wind Direction</span>
+            <span class="font-bold text-sky-400" id="val-slider-wind">180°</span>
+          </div>
+          <input type="range" id="slider-wind-dir" min="0" max="359" value="180" class="w-full h-2 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Wind Speed Slider -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300 font-medium">Wind Speed (Velocity)</span>
+            <span class="font-bold text-purple-400" id="val-slider-speed">8.5 m/s</span>
+          </div>
+          <input type="range" id="slider-wind-speed" min="1.0" max="25.0" step="0.5" value="8.5" class="w-full h-2 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Deadband Threshold Slider -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300 font-medium">Yaw Deadband (±°)</span>
+            <span class="font-bold text-amber-400" id="val-slider-deadband">7.0°</span>
+          </div>
+          <input type="range" id="slider-deadband" min="3.0" max="15.0" step="0.5" value="7.0" class="w-full h-2 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Quick Gust Event Triggers -->
+        <div class="flex items-end gap-2">
+          <button id="btn-gust-left" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 text-xs font-semibold rounded-lg border border-slate-700 transition">
+            -45° Shear
+          </button>
+          <button id="btn-gust-right" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-sky-400 text-xs font-semibold rounded-lg border border-slate-700 transition">
+            +45° Shear
+          </button>
+          <button id="btn-reversal" class="flex-1 py-2 bg-rose-950/70 hover:bg-rose-900 text-rose-300 text-xs font-semibold rounded-lg border border-rose-800/80 transition">
+            180° Reverse
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flower Pollination Algorithm (FPA) Interactive Explorer -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-lg">🌸</span>
+            <h2 class="text-base font-bold text-[var(--foreground)]">Floral Metaheuristic Optimization (Flower Pollination Algorithm)</h2>
+            <span class="text-xs px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800">Xin-She Yang (2012)</span>
+          </div>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Optimizes ConvGRU layers, hidden units, dropout, and learning rate using biotic <strong>Lévy flights</strong> and abiotic neighbor cross-pollination.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btn-step-fpa" class="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-xs font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+            <span>🌸</span> Step FPA Generation
+          </button>
+          <button id="btn-run-fpa-auto" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg border border-slate-700 transition">
+            Auto-Tune (6 Gens)
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- FPA 2D Landscape Visualizer (7 cols) -->
+        <div class="lg:col-span-7 bg-slate-950/70 border border-[var(--border)] rounded-xl p-3 flex flex-col justify-between">
+          <div class="flex justify-between text-xs text-[var(--muted-foreground)] mb-1">
+            <span>Pollen Gamete Population (GRU Hidden Dim vs. Conv Channels)</span>
+            <span id="fpa-status-text" class="text-purple-400 font-semibold">Generation 1/6 Active</span>
+          </div>
+          
+          <div class="w-full h-[220px] relative">
+            <canvas id="fpaCanvas" width="580" height="220" class="w-full h-full"></canvas>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-2 mt-2">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Global Best (g*)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span> Pollen Gametes (Flowers)</span>
+            <span class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-rose-400"></span> Lévy Flight Jump</span>
+            <span class="text-slate-500">p = 0.8 switch</span>
+          </div>
+        </div>
+
+        <!-- FPA Convergence Curve & Hyperparameter Table (5 cols) -->
+        <div class="lg:col-span-5 bg-slate-950/70 border border-[var(--border)] rounded-xl p-3 flex flex-col justify-between">
+          <div>
+            <div class="flex justify-between text-xs text-[var(--muted-foreground)] mb-1">
+              <span>Optimization Convergence (Val Circular MAE)</span>
+              <span class="text-emerald-400 font-bold" id="fpa-best-val-mae">Best: 2.46°</span>
+            </div>
+            <div class="w-full h-[110px] relative">
+              <canvas id="fpaChartCanvas" width="380" height="110" class="w-full h-full"></canvas>
+            </div>
+          </div>
+
+          <!-- Current Best Hyperparameters Table -->
+          <div class="mt-2 border-t border-slate-800 pt-2 text-xs">
+            <div class="text-[12px] uppercase font-bold text-slate-400 mb-1">Discovered Optimal Hyperparameters</div>
+            <div class="grid grid-cols-2 gap-1.5 text-slate-300">
+              <div class="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex justify-between">
+                <span class="text-slate-400">Conv Channels:</span> <span class="font-semibold text-sky-400" id="hparam-conv">48</span>
+              </div>
+              <div class="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex justify-between">
+                <span class="text-slate-400">GRU Latent:</span> <span class="font-semibold text-purple-400" id="hparam-gru">96</span>
+              </div>
+              <div class="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex justify-between">
+                <span class="text-slate-400">GRU Layers:</span> <span class="font-semibold text-amber-400" id="hparam-layers">2</span>
+              </div>
+              <div class="bg-slate-900/90 px-2 py-1 rounded border border-slate-800 flex justify-between">
+                <span class="text-slate-400">Dropout:</span> <span class="font-semibold text-rose-400" id="hparam-drop">0.18</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Interactive Logic Script -->
+  <script>
+    // State Variables
+    let windDir = 180.0;
+    let targetWindDir = 180.0;
+    let nacelleYaw = 180.0;
+    let predYaw = 180.0;
+    let windSpeed = 8.5;
+    let deadband = 7.0;
+    let isRunning = true;
+    let yawMotorSpeed = 0.5; // deg/step
+    let timeStep = 0;
+
+    // Time-Series History Buffer
+    const historyLength = 60;
+    let history = {
+      wind: Array(historyLength).fill(180),
+      yaw: Array(historyLength).fill(180),
+      pred: Array(historyLength).fill(180),
+      error: Array(historyLength).fill(0)
+    };
+
+    // FPA State
+    const numFlowers = 7;
+    let fpaGeneration = 1;
+    const maxFpaGens = 6;
+    let flowers = [];
+    let fpaHistory = [4.82];
+    let bestFlower = null;
+
+    function initFPA() {
+      flowers = [];
+      for (let i = 0; i < numFlowers; i++) {
+        flowers.push({
+          x: 20 + Math.random() * 60,  // Conv channels (16-64)
+          y: 40 + Math.random() * 80,  // GRU dim (32-128)
+          fitness: 3.5 + Math.random() * 1.5,
+          lastMove: null
+        });
+      }
+      flowers.sort((a, b) => a.fitness - b.fitness);
+      bestFlower = { ...flowers[0] };
+      fpaHistory = [bestFlower.fitness];
+    }
+    initFPA();
+
+    // DOM Elements
+    const compassCanvas = document.getElementById("compassCanvas");
+    const ctxCompass = compassCanvas.getContext("2d");
+    const chartCanvas = document.getElementById("chartCanvas");
+    const ctxChart = chartCanvas.getContext("2d");
+    const fpaCanvas = document.getElementById("fpaCanvas");
+    const ctxFpa = fpaCanvas.getContext("2d");
+    const fpaChartCanvas = document.getElementById("fpaChartCanvas");
+    const ctxFpaChart = fpaChartCanvas.getContext("2d");
+
+    // Metrics DOM
+    const elWindDir = document.getElementById("metric-wind-dir");
+    const elWindCardinal = document.getElementById("metric-wind-cardinal");
+    const elNacelleYaw = document.getElementById("metric-nacelle-yaw");
+    const elYawRate = document.getElementById("metric-yaw-rate");
+    const elPredYaw = document.getElementById("metric-pred-yaw");
+    const elPredDiff = document.getElementById("metric-pred-diff");
+    const elMisalign = document.getElementById("metric-misalign");
+    const elMisalignWrap = document.getElementById("metric-misalign-wrap");
+    const elDeadbandLimit = document.getElementById("metric-deadband-limit");
+    const elPower = document.getElementById("metric-power");
+    const elWindSpeed = document.getElementById("metric-wind-speed");
+    const elPowerLoss = document.getElementById("metric-power-loss");
+    const elPowerLossPct = document.getElementById("metric-power-loss-pct");
+    const elYawState = document.getElementById("badge-yaw-state");
+
+    // Sliders
+    const sliderWind = document.getElementById("slider-wind-dir");
+    const sliderSpeed = document.getElementById("slider-wind-speed");
+    const sliderDeadband = document.getElementById("slider-deadband");
+
+    sliderWind.addEventListener("input", (e) => {
+      targetWindDir = parseFloat(e.target.value);
+      document.getElementById("val-slider-wind").textContent = targetWindDir.toFixed(0) + "°";
+    });
+    sliderSpeed.addEventListener("input", (e) => {
+      windSpeed = parseFloat(e.target.value);
+      document.getElementById("val-slider-speed").textContent = windSpeed.toFixed(1) + " m/s";
+    });
+    sliderDeadband.addEventListener("input", (e) => {
+      deadband = parseFloat(e.target.value);
+      document.getElementById("val-slider-deadband").textContent = deadband.toFixed(1) + "°";
+      elDeadbandLimit.textContent = deadband.toFixed(1);
+    });
+
+    // Gust Buttons
+    document.getElementById("btn-gust-left").addEventListener("click", () => {
+      targetWindDir = (targetWindDir - 45 + 360) % 360;
+      sliderWind.value = targetWindDir;
+      document.getElementById("val-slider-wind").textContent = targetWindDir.toFixed(0) + "°";
+    });
+    document.getElementById("btn-gust-right").addEventListener("click", () => {
+      targetWindDir = (targetWindDir + 45) % 360;
+      sliderWind.value = targetWindDir;
+      document.getElementById("val-slider-wind").textContent = targetWindDir.toFixed(0) + "°";
+    });
+    document.getElementById("btn-reversal").addEventListener("click", () => {
+      targetWindDir = (targetWindDir + 180) % 360;
+      sliderWind.value = targetWindDir;
+      document.getElementById("val-slider-wind").textContent = targetWindDir.toFixed(0) + "°";
+    });
+
+    document.getElementById("btn-toggle-sim").addEventListener("click", (e) => {
+      isRunning = !isRunning;
+      e.target.textContent = isRunning ? "Pause" : "Resume";
+      e.target.className = isRunning
+        ? "px-3 py-1 bg-sky-600 hover:bg-sky-500 text-xs font-semibold rounded-lg shadow transition"
+        : "px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-lg shadow transition";
+    });
+
+    document.getElementById("btn-reset-stream").addEventListener("click", () => {
+      history = {
+        wind: Array(historyLength).fill(windDir),
+        yaw: Array(historyLength).fill(nacelleYaw),
+        pred: Array(historyLength).fill(predYaw),
+        error: Array(historyLength).fill(0)
+      };
+    });
+
+    function getCardinal(deg) {
+      const cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"];
+      return cardinals[Math.round((deg % 360) / 45)];
+    }
+
+    // Main Simulation Step (60 FPS / throttled update)
+    let lastUpdate = performance.now();
+    function updatePhysics() {
+      timeStep++;
+
+      // Natural stochastic wind turbulence
+      const turbulence = (Math.random() - 0.5) * 1.2;
+      const shortestWindDelta = (targetWindDir - windDir + 180) % 360 - 180;
+      windDir = (windDir + shortestWindDelta * 0.08 + turbulence + 360) % 360;
+
+      // Nacelle Physical Controller (Deadband Hysteresis)
+      const misalignment = (windDir - nacelleYaw + 180) % 360 - 180;
+      let activeYawSpeed = 0.0;
+
+      if (Math.abs(misalignment) > deadband) {
+        // Active rotation towards wind
+        const dir = Math.sign(misalignment);
+        const step = dir * Math.min(Math.abs(misalignment), yawMotorSpeed);
+        nacelleYaw = (nacelleYaw + step + 360) % 360;
+        activeYawSpeed = step;
+        elYawState.textContent = "ACTIVE YAWING";
+        elYawState.className = "font-semibold ml-1 text-amber-400";
+      } else {
+        elYawState.textContent = "DEADBAND HOLD";
+        elYawState.className = "font-semibold ml-1 text-emerald-400";
+      }
+
+      // Deep Learning Model Prediction Emulation (ConvGRU forward pass)
+      // Models anticipatory wind direction and deadband crossing
+      const futureWindEst = (windDir + shortestWindDelta * 0.12 + 360) % 360;
+      const expectedYawStep = (Math.abs(misalignment) > deadband) ? Math.sign(misalignment) * yawMotorSpeed : 0;
+      predYaw = (nacelleYaw + expectedYawStep * 1.05 + (Math.random() - 0.5) * 0.2 + 360) % 360;
+
+      // Aerodynamic Power Calculation: P = P0 * cos^2(misalignment)
+      const ratedPower = 2000.0; // kW
+      const rawPower = Math.min(ratedPower, 0.5 * 1.225 * Math.PI * (45**2) * (windSpeed**3) * 0.45 / 1000);
+      const misalignRad = (misalignment * Math.PI) / 180;
+      const powerLossFactor = Math.sin(misalignRad)**2;
+      const activePower = Math.max(0, rawPower * (Math.cos(misalignRad)**2));
+      const powerLossKw = rawPower - activePower;
+
+      // Update Buffers
+      history.wind.push(windDir);
+      history.wind.shift();
+      history.yaw.push(nacelleYaw);
+      history.yaw.shift();
+      history.pred.push(predYaw);
+      history.pred.shift();
+      history.error.push(Math.abs(misalignment));
+      history.error.shift();
+
+      // Update UI Metrics
+      elWindDir.textContent = windDir.toFixed(1);
+      elWindCardinal.textContent = `${getCardinal(windDir)} (${windDir.toFixed(0)}°)`;
+      elNacelleYaw.textContent = nacelleYaw.toFixed(1);
+      elYawRate.textContent = `${(activeYawSpeed * 60).toFixed(1)} °/min`;
+      elPredYaw.textContent = predYaw.toFixed(1);
+      
+      const predDiff = (predYaw - nacelleYaw + 180) % 360 - 180;
+      elPredDiff.textContent = `Δ ${predDiff >= 0 ? "+" : ""}${predDiff.toFixed(2)}° (Next Step)`;
+      
+      elMisalign.textContent = misalignment.toFixed(1);
+      if (Math.abs(misalignment) > deadband) {
+        elMisalignWrap.className = "text-xl font-bold mt-1 flex items-baseline gap-1 text-rose-400 animate-pulse";
+      } else {
+        elMisalignWrap.className = "text-xl font-bold mt-1 flex items-baseline gap-1 text-emerald-400";
+      }
+
+      elPower.textContent = Math.round(activePower).toLocaleString();
+      elWindSpeed.textContent = windSpeed.toFixed(1);
+      elPowerLoss.textContent = powerLossKw.toFixed(1);
+      elPowerLossPct.textContent = `${(powerLossFactor * 100).toFixed(1)}% cos²(γ) loss`;
+    }
+
+    // Compass Rendering
+    function drawCompass() {
+      const w = compassCanvas.width;
+      const h = compassCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = cx - 25;
+
+      ctxCompass.clearRect(0, 0, w, h);
+
+      // Outer Dial
+      ctxCompass.beginPath();
+      ctxCompass.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctxCompass.strokeStyle = "#334155";
+      ctxCompass.lineWidth = 3;
+      ctxCompass.stroke();
+
+      // Cardinal Labels
+      ctxCompass.font = "bold 13px -apple-system, sans-serif";
+      ctxCompass.fillStyle = "#94a3b8";
+      ctxCompass.textAlign = "center";
+      ctxCompass.textBaseline = "middle";
+      ctxCompass.fillText("N (0°)", cx, cy - r + 14);
+      ctxCompass.fillText("S (180°)", cx, cy + r - 14);
+      ctxCompass.fillText("E (90°)", cx + r - 22, cy);
+      ctxCompass.fillText("W (270°)", cx - r + 22, cy);
+
+      // Deadband Zone Arc around Nacelle Yaw
+      const yawRad = (nacelleYaw - 90) * Math.PI / 180;
+      const dbRad = (deadband * Math.PI) / 180;
+      ctxCompass.beginPath();
+      ctxCompass.arc(cx, cy, r - 10, yawRad - dbRad, yawRad + dbRad);
+      ctxCompass.strokeStyle = "rgba(245, 158, 11, 0.35)";
+      ctxCompass.lineWidth = 14;
+      ctxCompass.stroke();
+
+      // Nacelle Orientation Body (Yellow / Amber)
+      ctxCompass.save();
+      ctxCompass.translate(cx, cy);
+      ctxCompass.rotate(yawRad + Math.PI / 2);
+
+      // Turbine Hub & Nacelle
+      ctxCompass.fillStyle = "#f59e0b";
+      ctxCompass.beginPath();
+      ctxCompass.roundRect(-10, -28, 20, 56, 6);
+      ctxCompass.fill();
+
+      // Spinning Rotor Blades
+      const bladeAngle = (timeStep * 0.15) % (2 * Math.PI);
+      ctxCompass.strokeStyle = "#e2e8f0";
+      ctxCompass.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        const ang = bladeAngle + (i * 2 * Math.PI / 3);
+        ctxCompass.beginPath();
+        ctxCompass.moveTo(0, -28);
+        ctxCompass.lineTo(Math.cos(ang) * 45, -28 + Math.sin(ang) * 45);
+        ctxCompass.stroke();
+      }
+      ctxCompass.restore();
+
+      // Wind Vector Arrow (Sky Blue)
+      const windRad = (windDir - 90) * Math.PI / 180;
+      ctxCompass.save();
+      ctxCompass.translate(cx, cy);
+      ctxCompass.rotate(windRad);
+
+      ctxCompass.strokeStyle = "#38bdf8";
+      ctxCompass.lineWidth = 3.5;
+      ctxCompass.beginPath();
+      ctxCompass.moveTo(0, 0);
+      ctxCompass.lineTo(r - 18, 0);
+      ctxCompass.stroke();
+
+      // Arrow Head
+      ctxCompass.fillStyle = "#38bdf8";
+      ctxCompass.beginPath();
+      ctxCompass.moveTo(r - 12, 0);
+      ctxCompass.lineTo(r - 28, -7);
+      ctxCompass.lineTo(r - 28, 7);
+      ctxCompass.closePath();
+      ctxCompass.fill();
+      ctxCompass.restore();
+
+      // DL Predicted Yaw Marker (Emerald dot on perimeter)
+      const predRad = (predYaw - 90) * Math.PI / 180;
+      const px = cx + Math.cos(predRad) * (r - 2);
+      const py = cy + Math.sin(predRad) * (r - 2);
+      ctxCompass.beginPath();
+      ctxCompass.arc(px, py, 6, 0, 2 * Math.PI);
+      ctxCompass.fillStyle = "#10b981";
+      ctxCompass.fill();
+      ctxCompass.strokeStyle = "#064e3b";
+      ctxCompass.lineWidth = 2;
+      ctxCompass.stroke();
+    }
+
+    // Time-Series Stream Rendering
+    function drawTimeSeries() {
+      const w = chartCanvas.width;
+      const h = chartCanvas.height;
+      ctxChart.clearRect(0, 0, w, h);
+
+      // Grid Lines
+      ctxChart.strokeStyle = "#1e293b";
+      ctxChart.lineWidth = 1;
+      for (let y = 0; y <= h; y += h / 4) {
+        ctxChart.beginPath();
+        ctxChart.moveTo(0, y);
+        ctxChart.lineTo(w, y);
+        ctxChart.stroke();
+      }
+
+      function plotLine(data, color, lw, dash = []) {
+        ctxChart.strokeStyle = color;
+        ctxChart.lineWidth = lw;
+        ctxChart.setLineDash(dash);
+        ctxChart.beginPath();
+        for (let i = 0; i < data.length; i++) {
+          const x = (i / (data.length - 1)) * w;
+          const y = h - (data[i] / 360) * h;
+          if (i === 0) ctxChart.moveTo(x, y);
+          else ctxChart.lineTo(x, y);
+        }
+        ctxChart.stroke();
+        ctxChart.setLineDash([]);
+      }
+
+      // Plot series
+      plotLine(history.wind, "#38bdf8", 1.8);
+      plotLine(history.yaw, "#f59e0b", 2.2);
+      plotLine(history.pred, "#10b981", 1.8, [4, 4]);
+
+      // Plot error on bottom band (scale 0-20 deg)
+      ctxChart.fillStyle = "rgba(239, 68, 68, 0.25)";
+      ctxChart.beginPath();
+      ctxChart.moveTo(0, h);
+      for (let i = 0; i < history.error.length; i++) {
+        const x = (i / (history.error.length - 1)) * w;
+        const errY = h - Math.min(h * 0.4, (history.error[i] / 20) * (h * 0.4));
+        ctxChart.lineTo(x, errY);
+      }
+      ctxChart.lineTo(w, h);
+      ctxChart.closePath();
+      ctxChart.fill();
+    }
+
+    // FPA Parameter Space Visualizer
+    function drawFpaLandscape() {
+      const w = fpaCanvas.width;
+      const h = fpaCanvas.height;
+      ctxFpa.clearRect(0, 0, w, h);
+
+      // Background Grid
+      ctxFpa.strokeStyle = "#1e293b";
+      ctxFpa.lineWidth = 1;
+      ctxFpa.strokeRect(0, 0, w, h);
+
+      // Draw flowers
+      for (let i = 0; i < flowers.length; i++) {
+        const f = flowers[i];
+        const px = (f.x / 100) * w;
+        const py = h - (f.y / 150) * h;
+
+        // Draw last movement vector (Levy or neighbor)
+        if (f.lastMove) {
+          ctxFpa.strokeStyle = f.isLevy ? "#f43f5e" : "#38bdf8";
+          ctxFpa.lineWidth = f.isLevy ? 2 : 1;
+          ctxFpa.beginPath();
+          ctxFpa.moveTo((f.lastMove.x / 100) * w, h - (f.lastMove.y / 150) * h);
+          ctxFpa.lineTo(px, py);
+          ctxFpa.stroke();
+        }
+
+        ctxFpa.beginPath();
+        ctxFpa.arc(px, py, 6, 0, 2 * Math.PI);
+        ctxFpa.fillStyle = "#c084fc";
+        ctxFpa.fill();
+        ctxFpa.strokeStyle = "#581c87";
+        ctxFpa.lineWidth = 1.5;
+        ctxFpa.stroke();
+      }
+
+      // Draw Global Best (g*)
+      if (bestFlower) {
+        const bx = (bestFlower.x / 100) * w;
+        const by = h - (bestFlower.y / 150) * h;
+        ctxFpa.beginPath();
+        ctxFpa.arc(bx, by, 9, 0, 2 * Math.PI);
+        ctxFpa.fillStyle = "#34d399";
+        ctxFpa.fill();
+        ctxFpa.strokeStyle = "#064e3b";
+        ctxFpa.lineWidth = 2.5;
+        ctxFpa.stroke();
+      }
+    }
+
+    // FPA Convergence Chart
+    function drawFpaConvergence() {
+      const w = fpaChartCanvas.width;
+      const h = fpaChartCanvas.height;
+      ctxFpaChart.clearRect(0, 0, w, h);
+
+      if (fpaHistory.length < 2) return;
+
+      const minVal = 2.0;
+      const maxVal = 5.0;
+
+      ctxFpaChart.strokeStyle = "#a855f7";
+      ctxFpaChart.lineWidth = 2.5;
+      ctxFpaChart.beginPath();
+      for (let i = 0; i < fpaHistory.length; i++) {
+        const x = (i / (maxFpaGens)) * (w - 30) + 15;
+        const norm = (fpaHistory[i] - minVal) / (maxVal - minVal);
+        const y = h - 15 - Math.max(0, Math.min(1, norm)) * (h - 30);
+        if (i === 0) ctxFpaChart.moveTo(x, y);
+        else ctxFpaChart.lineTo(x, y);
+
+        // Point
+        ctxFpaChart.fillStyle = "#34d399";
+        ctxFpaChart.fillRect(x - 3, y - 3, 6, 6);
+      }
+      ctxFpaChart.stroke();
+    }
+
+    // FPA Optimization Step Action
+    function stepFPA() {
+      if (fpaGeneration >= maxFpaGens) return;
+      fpaGeneration++;
+
+      const pSwitch = 0.8;
+      for (let i = 0; i < flowers.length; i++) {
+        const f = flowers[i];
+        f.lastMove = { x: f.x, y: f.y };
+
+        if (Math.random() < pSwitch) {
+          // Global Pollination with Levy flight jump
+          f.isLevy = true;
+          const levy = (Math.random() - 0.5) * 35;
+          f.x += 0.2 * levy * (bestFlower.x - f.x);
+          f.y += 0.2 * levy * (bestFlower.y - f.y);
+        } else {
+          // Local Neighbor Pollination
+          f.isLevy = false;
+          const j = Math.floor(Math.random() * flowers.length);
+          const k = Math.floor(Math.random() * flowers.length);
+          f.x += Math.random() * (flowers[j].x - flowers[k].x);
+          f.y += Math.random() * (flowers[j].y - flowers[k].y);
+        }
+
+        // Clamp
+        f.x = Math.max(16, Math.min(64, f.x));
+        f.y = Math.max(32, Math.min(128, f.y));
+
+        // Evaluate candidate fitness (approaching optimum)
+        const distFromOpt = Math.hypot(f.x - 48, f.y - 96);
+        f.fitness = 2.45 + (distFromOpt / 60) * 1.6 + Math.random() * 0.15;
+
+        if (f.fitness < bestFlower.fitness) {
+          bestFlower = { ...f };
+        }
+      }
+
+      fpaHistory.push(bestFlower.fitness);
+      document.getElementById("fpa-status-text").textContent = `Generation ${fpaGeneration}/${maxFpaGens} Completed`;
+      document.getElementById("fpa-best-val-mae").textContent = `Best: ${bestFlower.fitness.toFixed(2)}°`;
+      document.getElementById("hparam-conv").textContent = Math.round(bestFlower.x);
+      document.getElementById("hparam-gru").textContent = Math.round(bestFlower.y);
+    }
+
+    document.getElementById("btn-step-fpa").addEventListener("click", () => {
+      stepFPA();
+      drawFpaLandscape();
+      drawFpaConvergence();
+    });
+
+    document.getElementById("btn-run-fpa-auto").addEventListener("click", () => {
+      initFPA();
+      let genInterval = setInterval(() => {
+        stepFPA();
+        drawFpaLandscape();
+        drawFpaConvergence();
+        if (fpaGeneration >= maxFpaGens) clearInterval(genInterval);
+      }, 350);
+    });
+
+    // Animation Loop
+    function loop() {
+      if (isRunning) {
+        updatePhysics();
+      }
+      drawCompass();
+      drawTimeSeries();
+      drawFpaLandscape();
+      drawFpaConvergence();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
